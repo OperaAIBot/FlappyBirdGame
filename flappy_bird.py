@@ -1,144 +1,146 @@
 import pygame
 import random
-import sys
+import math
 
 pygame.init()
 
-# Game constants
+# Game window dimensions
 WIDTH = 400
 HEIGHT = 600
-GRAVITY = 0.5
-JUMP_STRENGTH = -8
-PIPE_SPEED = 2
-PIPE_GAP = 150
-PIPE_WIDTH = 50
+window = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Flappy Bird")
 
 # Colors
-BLUE = (0, 70, 255)
-GREEN = (34, 139, 34)
-YELLOW = (255, 255, 0)
 WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
 
-# Initialize game
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Flappy Bird")
-clock = pygame.time.Clock()
+# Game properties
+BIRD_RADIUS = 20
+GRAVITY = 0.5
+JUMP_STRENGTH = -10
+PIPE_WIDTH = 80
+PIPE_GAP = 170
+PIPE_SPACING = 300
 
 class Bird:
     def __init__(self):
-        self.radius = 10
         self.x = WIDTH // 4
         self.y = HEIGHT // 2
         self.velocity = 0
-        
+        self.gravity = GRAVITY
+    
     def jump(self):
-        self.velocity = JUMP_STRENGTH
-        
+        self.velocity += JUMP_STRENGTH
+    
     def update(self):
-        self.velocity += GRAVITY
+        self.velocity += self.gravity
         self.y += self.velocity
         
         # Floor and ceiling collision
-        if self.y >= HEIGHT - self.radius:
-            self.y = HEIGHT - self.radius
-            return True
-        elif self.y <= self.radius:
-            self.y = self.radius
-            return True
-            
-        return False
+        if self.y - BIRD_RADIUS < 0:
+            self.y = BIRD_RADIUS
+            self.velocity = 0
+        elif self.y + BIRD_RADIUS > HEIGHT:
+            self.y = HEIGHT - BIRD_RADIUS
+            self.velocity = 0
 
 class Pipe:
     def __init__(self, x):
         self.x = x
-        self.top_height = random.randint(50, HEIGHT // 2)
-        self.bottom_y = self.top_height + PIPE_GAP
-        
-    def update(self):
-        self.x -= PIPE_SPEED
-        return True
-        
+        self.top_gap = random.randint(150, 450)
+        self.bottom_gap = self.top_gap + PIPE_GAP
+    
+    def move(self, dx):
+        self.x += dx
+    
     def get_rects(self):
-        top_rect = pygame.Rect(self.x, 0, PIPE_WIDTH, self.top_height)
-        bottom_rect = pygame.Rect(self.x, self.bottom_y, PIPE_WIDTH, HEIGHT - self.bottom_y)
-        return [top_rect, bottom_rect]
+        return [
+            pygame.Rect(self.x, 0, PIPE_WIDTH, self.top_gap),
+            pygame.Rect(self.x, self.bottom_gap, PIPE_WIDTH, HEIGHT - self.bottom_gap)
+        ]
 
 def draw_bird(bird):
-    pygame.draw.circle(screen, YELLOW, (int(bird.x), int(bird.y)), bird.radius)
+    pygame.draw.circle(window, BLACK, (int(bird.x), int(bird.y)), BIRD_RADIUS)
+
+def draw_pipes(pipes):
+    for pipe in pipes:
+        for rect in pipe.get_rects():
+            pygame.draw.rect(window, BLACK, rect)
+
+def check_collision(bird, pipes):
+    bird_x = bird.x
+    bird_y = bird.y
+    bird_radius = BIRD_RADIUS
+    
+    # Check if bird hits any pipe
+    for pipe in pipes:
+        top_pipe = pipe.get_rects()[0]
+        bottom_pipe = pipe.get_rects()[1]
+        
+        # Check collision with top pipe
+        if (bird_x - bird_radius <= top_pipe.right and
+            bird_x + bird_radius >= top_pipe.left and 
+            bird_y - bird_radius <= top_pipe.bottom):
+            return True
+        
+        # Check collision with bottom pipe
+        if (bird_x - bird_radius <= bottom_pipe.right and
+            bird_x + bird_radius >= bottom_pipe.left and 
+            bird_y + bird_radius >= bottom_pipe.top):
+            return True
+    
+    # Check boundaries
+    if bird.y <= bird_radius or bird.y >= HEIGHT - bird_radius:
+        return True
+        
+    return False
 
 def main():
     bird = Bird()
-    pipes = []
+    pipes = [Pipe(WIDTH + i * PIPE_SPACING) for i in range(3)]
+    
+    clock = pygame.time.Clock()
     score = 0
     font = pygame.font.Font(None, 36)
-    game_over = False
-    passed_pipes = set()
     
-    while True:
+    running = True
+    while running:
         # Event handling
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            if (event.type == pygame.KEYDOWN and 
-                (event.key == pygame.K_SPACE or event.key == pygame.K_UP)) or \
-               (event.type == pygame.MOUSEBUTTONDOWN):
+                running = False
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                 bird.jump()
         
         # Update game state
-        bird_dead = bird.update()
-
-        # Check for bird hitting floor/ceiling
-        if bird_dead:
-            game_over = True
-
-        # Add new pipes
-        if len(pipes) == 0 or pipes[-1].x < WIDTH - PIPE_WIDTH * 2:
-            pipes.append(Pipe(WIDTH))
-            
-        # Remove off-screen pipes and check collisions/score
-        for pipe in pipes.copy():
-            pipe.update()
-            rects = pipe.get_rects()
-            bird_rect = pygame.Rect(bird.x - bird.radius, bird.y - bird.radius,
-                                  2*bird.radius, 2*bird.radius)
-            if any(rect.colliderect(bird_rect) for rect in rects):
-                game_over = True
+        bird.update()
+        score += 1
+        
+        # Move pipes and check if new pipe is needed
+        for pipe in pipes:
+            pipe.move(-2)
             if pipe.x + PIPE_WIDTH < 0:
                 pipes.remove(pipe)
-            elif (pipe.x < bird.x and 
-                  not any(p.x == pipe.x for p in passed_pipes)):
-                score += 1
-                passed_pipes.add(pipe.x)
-
-        # Clear screen
-        screen.fill(BLUE)
+                new_pipe = Pipe(WIDTH)
+                pipes.append(new_pipe)
+         
+        # Draw everything
+        window.fill(WHITE)
         
-        # Draw pipes
-        for pipe in pipes:
-            top_rect = pygame.Rect(pipe.x, 0, PIPE_WIDTH, pipe.top_height)
-            bottom_rect = pygame.Rect(pipe.x, pipe.bottom_y, PIPE_WIDTH, HEIGHT - pipe.bottom_y)
-            pygame.draw.rect(screen, GREEN, top_rect)
-            pygame.draw.rect(screen, GREEN, bottom_rect)
-        
-        # Draw bird
+        draw_pipes(pipes)
         draw_bird(bird)
         
-        # Draw score
-        text = font.render(f"Score: {score}", True, WHITE)
-        screen.blit(text, (10, 10))
+        # Update score display
+        text_surface = font.render(f"Score: {score // 100}", True, BLACK)
+        window.blit(text_surface, (10, 10))
         
-        # Check if game over
-        if game_over:
-            pygame.time.wait(2000)  # Wait before restarting
-            bird = Bird()
-            pipes = []
-            score = 0
-            passed_pipes = set()
-            game_over = False
-            
-        # Update display
-        pygame.display.update()
+        pygame.display.flip()
+        
+        # Check for collisions
+        if check_collision(bird, pipes):
+            print("Game Over! Score:", score // 100)
+            running = False
+        
         clock.tick(60)
 
 if __name__ == "__main__":
