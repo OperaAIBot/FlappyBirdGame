@@ -71,6 +71,8 @@ def main():
     pipes = []
     score = 0
     font = pygame.font.Font(None, 36)
+    game_over = False
+    passed_pipes = set()
     
     while True:
         # Event handling
@@ -94,14 +96,17 @@ def main():
         for pipe in pipes.copy():
             pipe.update()
             rects = pipe.get_rects()
+            bird_rect = pygame.Rect(bird.x - bird.radius, bird.y - bird.radius,
+                                  2*bird.radius, 2*bird.radius)
             for rect in rects:
-                if pygame.Rect(bird.x - bird.radius, bird.y - bird.radius,
-                              2*bird.radius, 2*bird.radius).colliderect(rect):
-                    bird_dead = True
+                if bird_rect.colliderect(rect):
+                    game_over = True
             if pipe.x + PIPE_WIDTH < 0:
                 pipes.remove(pipe)
-            elif pipe.x < bird.x and not any(p.x == pipe.x for p in passed_pipes):
+            elif (pipe.x < bird.x and 
+                  not any(p.x == pipe.x for p in passed_pipes)):
                 score += 1
+                passed_pipes.add(pipe.x)
         
         # Clear screen
         screen.fill(BLUE)
@@ -121,9 +126,9 @@ def main():
         screen.blit(text, (10, 10))
         
         # Check if game over
-        if bird_dead:
+        if game_over:
             pygame.time.wait(2000)  # Wait before restarting
-            main()  # Reset game
+            main()  # Reset game variables and restart
             
         # Update display
         pygame.display.update()
