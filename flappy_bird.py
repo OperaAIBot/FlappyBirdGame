@@ -87,9 +87,13 @@ def main():
         
         # Update game state
         bird_dead = bird.update()
-        
+
+        # Check for bird hitting floor/ceiling
+        if bird_dead:
+            game_over = True
+
         # Add new pipes
-        if len(pipes) == 0 or pipes[-1].x < WIDTH - PIPE_WIDTH:
+        if len(pipes) == 0 or pipes[-1].x < WIDTH - PIPE_WIDTH * 2:
             pipes.append(Pipe(WIDTH))
             
         # Remove off-screen pipes and check collisions/score
@@ -98,16 +102,15 @@ def main():
             rects = pipe.get_rects()
             bird_rect = pygame.Rect(bird.x - bird.radius, bird.y - bird.radius,
                                   2*bird.radius, 2*bird.radius)
-            for rect in rects:
-                if bird_rect.colliderect(rect):
-                    game_over = True
+            if any(rect.colliderect(bird_rect) for rect in rects):
+                game_over = True
             if pipe.x + PIPE_WIDTH < 0:
                 pipes.remove(pipe)
             elif (pipe.x < bird.x and 
                   not any(p.x == pipe.x for p in passed_pipes)):
                 score += 1
                 passed_pipes.add(pipe.x)
-        
+
         # Clear screen
         screen.fill(BLUE)
         
@@ -128,7 +131,11 @@ def main():
         # Check if game over
         if game_over:
             pygame.time.wait(2000)  # Wait before restarting
-            main()  # Reset game variables and restart
+            bird = Bird()
+            pipes = []
+            score = 0
+            passed_pipes = set()
+            game_over = False
             
         # Update display
         pygame.display.update()
